@@ -2,6 +2,8 @@
 var emitterService = require("../services/emitter.service");
 var globalService = require("../services/global.service");
 var cacheService = require("../services/cache.service");
+var urlService = require("../services/url.service");
+urlService.startup();
 var pageBuilderService = require("../services/page-builder.service");
 var adminService = require("../services/admin.service");
 var dataService = require("../services/data.service");
@@ -82,30 +84,6 @@ exports.loadRoutes = async function (app) {
     next();
   });
 
-  //log a user out
-  app.get("/logout", async function (req, res, next) {
-    var user = app.models.User;
-    var token = req.signedCookies.sonicjs_access_token;
-    let currentUser = await userService.getCurrentUser(req);
-    if (!token) return res.sendStatus(401);
-
-    user.logout(token, async function (err) {
-      if (err) {
-        //user already logged out
-        res.redirect("/admin");
-      }
-
-      //amp
-      var data = {
-        event_type: "LOGOUT", // required
-        user_id: currentUser.email,
-      };
-
-      res.clearCookie("sonicjs_access_token");
-      res.redirect("/admin");
-    });
-  });
-
   app.get("/hbs", async function (req, res) {
     res.render("home");
   });
@@ -154,32 +132,6 @@ exports.loadRoutes = async function (app) {
     res.render("sandbox", { layout: "admin.handlebars", data: data });
   });
 
-  app.get("/ztest", async function (req, res) {
-    res.send("ok");
-  });
-
-  app.get("/session-test", async function (req, res) {
-    var token = req.signedCookies.sonicjs_access_token;
-    if (req.session.views) {
-      req.session.views++;
-      res.setHeader("Content-Type", "text/html");
-      res.write("<p>views: " + req.session.views + "</p>");
-      res.write("<p>expires in: " + req.session.cookie.maxAge / 1000 + "s</p>");
-      res.end();
-    } else {
-      req.session.views = 1;
-      res.end("welcome to the session demo. refresh!");
-    }
-  });
-
-  app.get("/session-details", async function (req, res) {
-    var token = req.signedCookies.sonicjs_access_token;
-    let userId = await userService.getCurrentUserId(req);
-    let user = await userService.getCurrentUser(req);
-
-    res.send(`userId:${userId}`);
-  });
-
   app.get("/css/generated.css", async function (req, res) {
     res.set("Content-Type", "text/css");
     let css = await cssService.getGeneratedCss();
@@ -187,7 +139,7 @@ exports.loadRoutes = async function (app) {
   });
 
   app.post("/dropzone-upload", async function (req, res) {
-    console.log('dropzone-upload req.files.file', req.files.file)
+    console.log("dropzone-upload req.files.file", req.files.file);
     await fileService.uploadWriteFile(req.files.file, req.sessionID);
     res.sendStatus(200);
   });
@@ -257,15 +209,29 @@ exports.loadRoutesCatchAll = async function (app) {
       return next();
     }
 
-
-
     if (process.env.MODE == "production") {
       console.log(`serving: ${req.url}`);
     }
 
     let isAuthenticated = await userService.isAuthenticated(req);
     globalService.setAreaMode(false, true, isAuthenticated);
-    var { page } = await contentService.getRenderedPage(req);
+
+    //lookup which module should handle this request
+    console.log("processing", req.url);
+    let urlKey = await urlService.getUrl(req.url);
+    console.log("urlKey", urlKey);
+
+
+    //replace this will 
+
+    var page = {};
+    req.urlKey = urlKey;
+    var processUrlOptions = { req, res, urlKey, page };
+
+    await emitterService.emit("processUrl",processUrlOptions);
+    page = processUrlOptions.page;
+
+// return;
 
     if (page.data.title === "Not Found") {
       // res.render("404", page);

@@ -4,6 +4,7 @@ var listService = require(".//list.service");
 var menuService = require(".//menu.service");
 var helperService = require(".//helper.service");
 var dataService = require(".//data.service");
+var urlService = require(".//url.service");
 var globalService = require(".//global.service");
 const connectEnsureLogin = require("connect-ensure-login");
 var dataService = require(".//data.service");
@@ -11,6 +12,7 @@ var userService = require(".//user.service");
 var breadcrumbsService = require("../services/breadcrumbs.service");
 var dalService = require(".//dal.service");
 const mixPanelService = require("../modules/mixpanel/services/mixpanel-main-service");
+const appAnalyticReportService = require("../modules/app-analytics/services/app-analytics-report-service");
 
 var emitterService = require("./emitter.service");
 
@@ -129,6 +131,17 @@ module.exports = adminService = {
             "menu",
             req.sessionID
           );
+        }
+
+        if (viewName == "admin-taxonomy") {
+          data = await dataService.getContentByContentType(
+            "taxonomy",
+            req.sessionID
+          );
+        }
+
+        if (viewName == "admin-urls") {
+          data.data = await urlService.getUrls();
         }
 
         if (viewName == "admin-site-settings") {
@@ -262,6 +275,10 @@ module.exports = adminService = {
               req.sessionID
             );
           }
+        }
+
+        if (viewName == "admin-reports-analytics") {
+          data = await appAnalyticReportService.getAggregates(req.sessionID);
         }
 
         let accessToken = "fakeToken"; //await userService.getToken(req);
